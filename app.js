@@ -1,12 +1,19 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const mongoose = require('mongoose')
-const feedRoutes = require('./routes/feed');
-const authRoutes = require('./routes/auth');
-
 const path = require("path");
 const router = require('./routes/feed');
 const multer = require("multer");
+const graphql = require("express-graphql");
+const graphqlSchema = require("./graphql/schema")
+const graphqlReslover = require("./graphql/resolvers");
+const { formatError } = require('graphql');
+const { measureMemory } = require('vm');
+const auth = require('./middleware/auth')
+
+const { clear } = require('console');
+const {clearImage} = require("./util/file")
+
 const app = express();
 const fileStorage = multer.diskStorage({
     destination:(req,file,cb) =>{
@@ -37,11 +44,44 @@ app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'OPTIONS, GET, POST, PUT, PATCH, DELETE');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    if(req.method === 'OPTIONS'){
+        return res.sendStatus(200)
+    }
     next();
 });
+app.use(auth);
+app.put('/post-image',(req,res,nect) =>{
+    if(req.isAuth){
+        throw new Error("Not Auth")
+    }
+    if(!req.file){
+        return res.status(200).json({message: 'No file provided'})
+    }
+    if(req.body.oldPath){
+        clearImage(req.body.oldPath);
 
-app.use('/feed', feedRoutes);
-app.use('/auth', authRoutes)
+    }
+    return res.status(201).json({message: 'File Stored', filePath: req.file.path})
+
+});
+
+app.use('/graphql', graphql({
+    schema: graphqlSchema,
+    rootValue: graphqlReslover,
+    graphql: true,
+    formatError(err){
+        if (!err.originalError){
+            return err;
+        }
+     const data = err.originalError.data;
+     const message = err.message || "An error ocurred";
+     const code = err.originalError.code || 500;
+     return{message: message, status: code, data: data}
+    }
+}
+))
+
+
 
 app.use((error, req, res, next) =>{
     const data = error.data;
@@ -50,7 +90,7 @@ app.use((error, req, res, next) =>{
     const message = error.message;
     res.status(status).json({message: message, data: data})
 })
-mongoose.connect('mongodb+srv://dardan:dardan@cluster0.6yiwy8g.mongodb.net/messages').then(result =>{
+mongoose.connect('mongodb+srv://dardan:dardan@cluster0.6yiwy8g.mongodb.net/messages')
+.then(result =>{
     app.listen(3002)
-}).catch(err => console.log(err));
-router.get("/post/:postId");
+}).catch(err => console.log(err))
