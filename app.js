@@ -1,4 +1,5 @@
 const express = require('express');
+const fs = require("fs")
 const bodyParser = require('body-parser');
 const mongoose = require('mongoose')
 const path = require("path");
@@ -10,10 +11,15 @@ const graphqlReslover = require("./graphql/resolvers");
 const { formatError } = require('graphql');
 const { measureMemory } = require('vm');
 const auth = require('./middleware/auth')
+const helmet = require("helmet")
+const compression = require("compression")
+const morgan = require("morgan")
 
 const { clear } = require('console');
-const {clearImage} = require("./util/file")
-
+const {clearImage} = require("./util/file");
+const { default: helmet } = require('helmet');
+const MONGODB_URI =
+`mongodb+srv://${process.env.MONGO_USER}:${process.env.MONGO_PASSWORD}@cluster0.6yiwy8g.mongodb.net/${MONGO_DATABASE}`
 const app = express();
 const fileStorage = multer.diskStorage({
     destination:(req,file,cb) =>{
@@ -90,7 +96,14 @@ app.use((error, req, res, next) =>{
     const message = error.message;
     res.status(status).json({message: message, data: data})
 })
-mongoose.connect('mongodb+srv://dardan:dardan@cluster0.6yiwy8g.mongodb.net/messages')
+const accessLogStream = fs.createWriteStream(path.join(__dirname, 'access.log'), 
+{flags: 'a'}
+);
+app.use(helmet());
+app.use(compression());
+app.use(morgan('combined',{stream: accessLogStream}));
+
+mongoose.connect(MONGODB_URI)
 .then(result =>{
-    app.listen(3002)
+    app.listen(process.env.PORT || 3000)
 }).catch(err => console.log(err))
